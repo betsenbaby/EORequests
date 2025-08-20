@@ -1,39 +1,90 @@
-﻿// Infrastructure/Seed/DbSeeder.cs
-using EORequests.Domain.Entities;
+﻿using EORequests.Domain.Entities;
+using EORequests.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace EORequests.Infrastructure.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(EoDbContext db)
+    public static async Task SeedAsync(EoDbContext db, CancellationToken ct = default)
     {
-        if (!await db.RequestTypes.AnyAsync())
+        // --- Roles: only those needed for Consultant workflow ---
+        var roleNames = new[] { "Reviewer", "ProcessOwner", "Admin" };
+        var existingRoles = await db.ApplicationRoles
+            .Where(r => roleNames.Contains(r.Name))
+            .Select(r => r.Name)
+            .ToListAsync(ct);
+
+        foreach (var rn in roleNames.Except(existingRoles))
+            db.ApplicationRoles.Add(new Domain.Security.ApplicationRole { Name = rn });
+
+        await db.SaveChangesAsync(ct);
+
+        // --- Request Type: Consultant ---
+        var consult = await db.RequestTypes.FirstOrDefaultAsync(x => x.Code == "CONSULT", ct);
+        if (consult == null)
         {
-            var cr = new RequestType { Code = "CONSULT", Name = "Consultant Request" };
-            var ict = new RequestType { Code = "ICT", Name = "ICT Support" };
-
-            db.RequestTypes.AddRange(cr, ict);
-            await db.SaveChangesAsync();
-
-            // Minimal workflow templates with 2–3 steps
-            var crTemplate = new WorkflowTemplate { RequestTypeId = cr.Id, Code = "CONSULT_V1", Name = "Consultant Workflow" };
-            var ictTemplate = new WorkflowTemplate { RequestTypeId = ict.Id, Code = "ICT_V1", Name = "ICT Support Workflow" };
-
-            db.WorkflowTemplates.AddRange(crTemplate, ictTemplate);
-            await db.SaveChangesAsync();
-
-            db.WorkflowStepTemplates.AddRange(
-                new WorkflowStepTemplate { WorkflowTemplateId = crTemplate.Id, StepOrder = 1, Code = "CR_SUBMIT", Name = "Submit", AssignmentMode = Domain.Enums.AssignmentMode.AutoAssign, AllowCreatorOrPreparer = true },
-                new WorkflowStepTemplate { WorkflowTemplateId = crTemplate.Id, StepOrder = 2, Code = "CR_REVIEW", Name = "Review", AssignmentMode = Domain.Enums.AssignmentMode.RoleBased, AllowedRolesCsv = "Reviewer" },
-                new WorkflowStepTemplate { WorkflowTemplateId = crTemplate.Id, StepOrder = 3, Code = "CR_APPROVE", Name = "Approve", AssignmentMode = Domain.Enums.AssignmentMode.RoleBased, AllowedRolesCsv = "ProcessOwner" },
-
-                new WorkflowStepTemplate { WorkflowTemplateId = ictTemplate.Id, StepOrder = 1, Code = "ICT_SUBMIT", Name = "Submit", AssignmentMode = Domain.Enums.AssignmentMode.AutoAssign, AllowCreatorOrPreparer = true },
-                new WorkflowStepTemplate { WorkflowTemplateId = ictTemplate.Id, StepOrder = 2, Code = "ICT_ASSIGN", Name = "Assign", AssignmentMode = Domain.Enums.AssignmentMode.SelectedByPreviousStep },
-                new WorkflowStepTemplate { WorkflowTemplateId = ictTemplate.Id, StepOrder = 3, Code = "ICT_RESOLVE", Name = "Resolve", AssignmentMode = Domain.Enums.AssignmentMode.RoleBased, AllowedRolesCsv = "ICTAgent" }
-            );
-
-            await db.SaveChangesAsync();
+            consult = new RequestType { Code = "CONSULT", Name = "Consultant Request" };
+            db.RequestTypes.Add(consult);
+            await db.SaveChangesAsync(ct);
         }
+
+        // --- Workflow Template: Consultant ---
+        var consultWf = await db.WorkflowTemplates
+            .FirstOrDefaultAsync(x => x.RequestTypeId == consult.Id && x.Code == "CONSULT_V1", ct);
+        if (consultWf == null)
+        {
+            consultWf = new WorkflowTemplate
+            {
+                RequestTypeId = consult.Id,
+                Code = "CONSULT_V1",
+                Name = "Consultant Workflow V1"
+            };
+            db.WorkflowTemplates.Add(consultWf);
+            await db.SaveChangesAsync(ct);
+        }
+
+        // --- Steps: Consultant workflow ---
+        async Task EnsureStepAsync(Guid wfId, int order, string code, string name,
+            AssignmentMode mode, string? allowedRoles = null, bool allowCreator = false)
+        {
+            var exists = await db.WorkflowStepTemplates
+                .AnyAsync(s => s.WorkflowTemplateId == wfId && s.StepOrder == order, ct);
+            if (!exists)
+            {
+                db.WorkflowStepTemplates.Add(new WorkflowStepTemplate
+                {
+                    WorkflowTemplateId = wfId,
+                    StepOrder = order,
+                    Code = code,
+                    Name = name,
+                    AssignmentMode = mode,
+                    AllowedRolesCsv = allowedRoles,
+                    AllowCreatorOrPreparer = allowCreator
+                });
+            }
+        }
+
+        await EnsureStepAsync(consultWf.Id, 1, "CR_SUBMIT", "Submit", AssignmentMode.AutoAssign, null, allowCreator: true);
+        await EnsureStepAsync(consultWf.Id, 2, "CR_REVIEW", "Review", AssignmentMode.RoleBased, "Reviewer");
+        await EnsureStepAsync(consultWf.Id, 3, "CR_APPROVE", "Approve", AssignmentMode.RoleBased, "ProcessOwner");
+
+        await db.SaveChangesAsync(ct);
+
+        // --- Example SLA rules ---
+        var consultSteps = await db.WorkflowStepTemplates
+            .Where(s => s.WorkflowTemplateId == consultWf.Id)
+            .OrderBy(s => s.StepOrder).ToListAsync(ct);
+
+        async Task EnsureSlaAsync(Guid stepTemplateId, int dueDays)
+        {
+            var exists = await db.SlaRules.AnyAsync(s => s.WorkflowStepTemplateId == stepTemplateId && s.DueDays == dueDays, ct);
+            if (!exists) db.SlaRules.Add(new SlaRule { WorkflowStepTemplateId = stepTemplateId, DueDays = dueDays });
+        }
+
+        if (consultSteps.Count > 1) await EnsureSlaAsync(consultSteps[1].Id, 3); // Review due in 3 days
+        if (consultSteps.Count > 2) await EnsureSlaAsync(consultSteps[2].Id, 2); // Approve due in 2 days
+
+        await db.SaveChangesAsync(ct);
     }
 }

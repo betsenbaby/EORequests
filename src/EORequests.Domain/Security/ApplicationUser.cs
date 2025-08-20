@@ -13,6 +13,8 @@ namespace EORequests.Domain.Security
         public string DisplayName { get; set; } = default!;
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
+        public string? IndexNumber { get; set; }
+        public bool IsActive { get; set; }
 
         public ICollection<ApplicationUserRole> ApplicationUserRoles { get; set; } = new List<ApplicationUserRole>();
     }
