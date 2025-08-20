@@ -1,7 +1,10 @@
 ﻿using EORequests.Domain.Audit;
+using EORequests.Domain.Entities;
 using EORequests.Domain.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;              // <-- needed for .Where(...)
+using System.Security.Claims;
 
 namespace EORequests.Infrastructure.Data;
 
@@ -19,91 +22,80 @@ public class EoDbContext : DbContext
     public DbSet<ApplicationUserRole> ApplicationUserRoles => Set<ApplicationUserRole>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
+    // Step 1 entities
+    public DbSet<RequestType> RequestTypes => Set<RequestType>();
+    public DbSet<Request> Requests => Set<Request>();
+    public DbSet<WorkflowTemplate> WorkflowTemplates => Set<WorkflowTemplate>();
+    public DbSet<WorkflowStepTemplate> WorkflowStepTemplates => Set<WorkflowStepTemplate>();
+    public DbSet<WorkflowInstance> WorkflowInstances => Set<WorkflowInstance>();
+    public DbSet<WorkflowState> WorkflowStates => Set<WorkflowState>();
+    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<SlaRule> SlaRules => Set<SlaRule>();
+    public DbSet<EscalationRule> EscalationRules => Set<EscalationRule>();
+    public DbSet<CommentThread> CommentThreads => Set<CommentThread>();
+    public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<CommentReaction> CommentReactions => Set<CommentReaction>();
+    public DbSet<Mention> Mentions => Set<Mention>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
-        // Global config for all AuditableEntity descendants
-        foreach (var et in b.Model.GetEntityTypes()
-                     .Where(t => typeof(AuditableEntity).IsAssignableFrom(t.ClrType)))
+        base.OnModelCreating(b);
+        b.ApplyConfigurationsFromAssembly(typeof(EoDbContext).Assembly);
+
+        // Global NEWSEQUENTIALID for Guid PKs named "Id"
+        foreach (var entity in b.Model.GetEntityTypes())
         {
-            b.Entity(et.ClrType).Property<byte[]>("RowVersion").IsRowVersion();
-            b.Entity(et.ClrType).Property<string?>("CreatedBy").HasMaxLength(256);
-            b.Entity(et.ClrType).Property<string?>("ModifiedBy").HasMaxLength(256);
+            var id = entity.FindProperty("Id");
+            if (id != null && id.ClrType == typeof(Guid))
+            {
+                id.SetDefaultValueSql("NEWSEQUENTIALID()");
+                id.ValueGenerated = Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.OnAdd;
+            }
         }
 
-        // ApplicationUser
-        b.Entity<ApplicationUser>(e =>
+        // Map real RowVersion on all AuditableEntity types
+        foreach (var et in b.Model.GetEntityTypes()
+                 .Where(t => typeof(AuditableEntity).IsAssignableFrom(t.ClrType)))
         {
-            e.ToTable("application_user");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id)
-                .HasDefaultValueSql("NEWSEQUENTIALID()")     // DB generates IDs
-                .ValueGeneratedOnAdd();
-
-            e.Property(x => x.Email).IsRequired().HasMaxLength(256);
-            e.Property(x => x.DisplayName).IsRequired().HasMaxLength(256);
-            e.HasIndex(x => x.Email).IsUnique();
-        });
-
-        // ApplicationRole
-        b.Entity<ApplicationRole>(e =>
-        {
-            e.ToTable("application_role");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id)
-                .HasDefaultValueSql("NEWSEQUENTIALID()")
-                .ValueGeneratedOnAdd();
-
-            e.Property(x => x.Name).IsRequired().HasMaxLength(128);
-            e.HasIndex(x => x.Name).IsUnique();
-        });
-
-        // Join
-        b.Entity<ApplicationUserRole>(e =>
-        {
-            e.ToTable("application_user_role");
-            e.HasKey(x => new { x.UserId, x.RoleId });
-            e.HasOne(x => x.User).WithMany(u => u.ApplicationUserRoles).HasForeignKey(x => x.UserId);
-            e.HasOne(x => x.Role).WithMany(r => r.ApplicationUserRoles).HasForeignKey(x => x.RoleId);
-        });
-
-
-        // ActivityLog (if you use it)
-        b.Entity<ActivityLog>(e =>
-        {
-            e.ToTable("activity_log");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id)
-                .HasDefaultValueSql("NEWSEQUENTIALID()")
-                .ValueGeneratedOnAdd();
-
-            e.Property(x => x.Actor).HasMaxLength(256);
-            e.Property(x => x.Action).HasMaxLength(256);
-            e.Property(x => x.EntityType).HasMaxLength(128);
-            e.Property(x => x.EntityId).HasMaxLength(64);
-        });
+            b.Entity(et.ClrType)
+             .Property<byte[]>(nameof(AuditableEntity.RowVersion))
+             .IsRowVersion()
+             .HasColumnName("row_version");
+        }
     }
 
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+
+    public override int SaveChanges()
+    {
+        ApplyAuditStamps();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyAuditStamps();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplyAuditStamps()
     {
         var now = DateTime.UtcNow;
-        var user = _http.HttpContext?.User;
-        var email = user?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                 ?? user?.Identity?.Name;
+        var email = _http.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value
+                 ?? _http.HttpContext?.User?.Identity?.Name;
 
-        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
+        foreach (var e in ChangeTracker.Entries<AuditableEntity>())
         {
-            if (entry.State == EntityState.Added)
+            if (e.State == EntityState.Added)
             {
-                entry.Entity.CreatedOn = now;
-                entry.Entity.CreatedBy = email;
+                e.Entity.CreatedOn = now;
+                e.Entity.CreatedBy = email;
             }
-            else if (entry.State == EntityState.Modified)
+            else if (e.State == EntityState.Modified)
             {
-                entry.Entity.ModifiedOn = now;
-                entry.Entity.ModifiedBy = email;
+                e.Entity.ModifiedOn = now;
+                e.Entity.ModifiedBy = email;
             }
         }
-
-        return await base.SaveChangesAsync(cancellationToken);
     }
 }
