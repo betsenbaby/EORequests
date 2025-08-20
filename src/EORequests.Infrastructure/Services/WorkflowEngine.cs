@@ -5,11 +5,6 @@ using EORequests.Domain.Events;
 using EORequests.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EORequests.Infrastructure.Services
 {
@@ -19,13 +14,15 @@ namespace EORequests.Infrastructure.Services
         private readonly IBranchRuleEvaluator _branch;
         private readonly IDomainEventDispatcher _events;
         private readonly ILogger<WorkflowEngine> _log;
+        private readonly ISlaService _sla;
 
-        public WorkflowEngine(EoDbContext db, IBranchRuleEvaluator branch, IDomainEventDispatcher events, ILogger<WorkflowEngine> log)
+        public WorkflowEngine(EoDbContext db, IBranchRuleEvaluator branch, IDomainEventDispatcher events, ISlaService sla, ILogger<WorkflowEngine> log)
         {
             _db = db;
             _branch = branch;
             _events = events;
             _log = log;
+            _sla = sla;
         }
 
         public async Task<WorkflowInstance> StartInstanceAsync(Guid requestId, Guid startedByUserId, CancellationToken ct = default)
@@ -69,6 +66,10 @@ namespace EORequests.Infrastructure.Services
 
                 instance.CurrentStepId = state.Id;
                 await _db.SaveChangesAsync(ct);
+
+                // --- SLA: compute DueOn and schedule jobs for the newly activated step
+                await _sla.ComputeAndSetDueDateAsync(state, ct);
+                await _sla.ScheduleReminderAndEscalationJobsAsync(state, ct);
 
                 await _events.PublishAsync(new StepActivated(instance.Id, state.Id, firstStep.Id, state.AssigneeUserId), ct);
                 _log.LogInformation("Workflow started for request {RequestId} with instance {InstanceId}", req.Id, instance.Id);
@@ -128,6 +129,10 @@ namespace EORequests.Infrastructure.Services
                 curr.IsComplete = true;
                 curr.StateCode = WorkflowStateCode.Completed;
                 await _db.SaveChangesAsync(ct);
+
+                // --- SLA: cancel any pending reminder/escalation for the completed state
+                await _sla.CancelJobsForStateAsync(curr.Id);
+
                 await _events.PublishAsync(new StepCompleted(inst.Id, curr.Id, curr.StepTemplateId, byUserId), ct);
 
                 // compute next step (default = next order)
@@ -159,6 +164,10 @@ namespace EORequests.Infrastructure.Services
 
                 inst.CurrentStepId = nextState.Id;
                 await _db.SaveChangesAsync(ct);
+
+                // --- SLA: compute DueOn and schedule jobs for the newly activated next step
+                await _sla.ComputeAndSetDueDateAsync(nextState, ct);
+                await _sla.ScheduleReminderAndEscalationJobsAsync(nextState, ct);
 
                 await _events.PublishAsync(new StepActivated(inst.Id, nextState.Id, next.Id, nextState.AssigneeUserId), ct);
 
@@ -195,6 +204,10 @@ namespace EORequests.Infrastructure.Services
                 curr.IsComplete = true;
                 curr.StateCode = WorkflowStateCode.Skipped;
                 await _db.SaveChangesAsync(ct);
+
+                // --- SLA: cancel pending jobs for the skipped/branched state
+                await _sla.CancelJobsForStateAsync(curr.Id);
+
                 await _events.PublishAsync(new StepCompleted(inst.Id, curr.Id, curr.StepTemplateId, byUserId), ct);
 
                 var tmpl = await _db.WorkflowTemplates
@@ -241,6 +254,10 @@ namespace EORequests.Infrastructure.Services
 
                 inst.CurrentStepId = nextState.Id;
                 await _db.SaveChangesAsync(ct);
+
+                // --- SLA: compute DueOn and schedule jobs for the newly activated next step
+                await _sla.ComputeAndSetDueDateAsync(nextState, ct);
+                await _sla.ScheduleReminderAndEscalationJobsAsync(nextState, ct);
 
                 await _events.PublishAsync(new StepActivated(inst.Id, nextState.Id, nextTmpl.Id, nextState.AssigneeUserId), ct);
                 if (curr.AssigneeUserId != nextState.AssigneeUserId)

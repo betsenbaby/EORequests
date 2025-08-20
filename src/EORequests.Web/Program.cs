@@ -227,6 +227,10 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IWorkflowEngine, WorkflowEngine>();
 builder.Services.AddSingleton<IBranchRuleEvaluator, BranchRuleEvaluator>();
 builder.Services.AddSingleton<IDomainEventDispatcher, LoggingEventDispatcher>();
+builder.Services.AddScoped<ISlaService, SlaService>();
+builder.Services.AddScoped<ISlaJobRunner, SlaJobRunner>();
+
+// ---------------------------
 
 
 // Access control service

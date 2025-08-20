@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Moq; // if you want to use Moq; otherwise see No‑Moq stub below
+using EORequests.Application.Interfaces;
 
 namespace EORequests.Tests
 {
@@ -56,11 +58,21 @@ namespace EORequests.Tests
             db.Requests.Add(req);
             await db.SaveChangesAsync();
 
+            var slaMock = new Moq.Mock<ISlaService>(Moq.MockBehavior.Loose);
+            slaMock.Setup(s => s.ComputeAndSetDueDateAsync(It.IsAny<WorkflowState>(), It.IsAny<CancellationToken>()))
+                   .ReturnsAsync((DateTime?)null);
+            slaMock.Setup(s => s.ScheduleReminderAndEscalationJobsAsync(It.IsAny<WorkflowState>(), It.IsAny<CancellationToken>()))
+                   .Returns(Task.CompletedTask);
+            slaMock.Setup(s => s.CancelJobsForStateAsync(It.IsAny<Guid>()))
+                   .Returns(Task.CompletedTask);
+
             var engine = new WorkflowEngine(
                 db,
                 new BranchRuleEvaluator(),
                 new LoggingEventDispatcher(new NullLogger<LoggingEventDispatcher>()),
+                slaMock.Object,
                 new NullLogger<WorkflowEngine>());
+
 
             var instance = await engine.StartInstanceAsync(req.Id, requesterId);
             Assert.False(instance.IsComplete);
@@ -98,11 +110,21 @@ namespace EORequests.Tests
             db.Requests.Add(req);
             await db.SaveChangesAsync();
 
+            var slaMock = new Moq.Mock<ISlaService>(Moq.MockBehavior.Loose);
+            slaMock.Setup(s => s.ComputeAndSetDueDateAsync(It.IsAny<WorkflowState>(), It.IsAny<CancellationToken>()))
+                   .ReturnsAsync((DateTime?)null);
+            slaMock.Setup(s => s.ScheduleReminderAndEscalationJobsAsync(It.IsAny<WorkflowState>(), It.IsAny<CancellationToken>()))
+                   .Returns(Task.CompletedTask);
+            slaMock.Setup(s => s.CancelJobsForStateAsync(It.IsAny<Guid>()))
+                   .Returns(Task.CompletedTask);
+
             var engine = new WorkflowEngine(
                 db,
                 new BranchRuleEvaluator(),
                 new LoggingEventDispatcher(new NullLogger<LoggingEventDispatcher>()),
+                slaMock.Object,
                 new NullLogger<WorkflowEngine>());
+
 
             var inst = await engine.StartInstanceAsync(req.Id, req.CreatedByUserId);
 
