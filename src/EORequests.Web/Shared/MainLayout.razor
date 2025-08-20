@@ -1,0 +1,42 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+
+<div class="topbar" style="padding:10px;border-bottom:1px solid #ddd;">
+    <b>EO Requests</b>
+
+    <span style="float:right">
+        <AuthorizeView>
+            <Authorized Context="auth">
+                @{
+                    var claimsByType = auth.User.Claims
+                    .GroupBy(c => c.Type)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                    var firstName = claimsByType.ContainsKey("FirstName") ? claimsByType["FirstName"].First().Value : null;
+                    var lastName = claimsByType.ContainsKey("LastName") ? claimsByType["LastName"].First().Value : null;
+                    var email = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+
+                    string displayName;
+                    if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(lastName))
+                    {
+                        displayName = $"{firstName} {lastName}".Trim();
+                    }
+                    else
+                    {
+                        displayName = email ?? auth.User.Identity?.Name ?? "User";
+                    }
+                }
+
+                <span>Hello, @displayName 👋</span>
+                <a class="ms-3" href="/account/signout">Sign out</a>
+            </Authorized>
+            <NotAuthorized>
+                <a href="/account/signin">Sign in</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </span>
+</div>
+
+<div class="main p-3">
+    @Body
+</div>

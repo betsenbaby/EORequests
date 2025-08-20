@@ -1,0 +1,37 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h1>EO Requests</h1>
+
+@code {
+    private string? userName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+
+        if (user.Identity?.IsAuthenticated ?? false)
+        {
+            // Try common claim types in order
+            userName =
+                user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? user.FindFirst("preferred_username")?.Value
+                ?? user.FindFirst("upn")?.Value
+                ?? (IsEmailLike(user.Identity?.Name) ? user.Identity?.Name : null);
+        }
+    }
+
+    private static bool IsEmailLike(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Contains("@") && value.Contains(".");
+}
+
+@if (string.IsNullOrEmpty(userName))
+{
+    <p>You are not signed in.</p>
+}
+else
+{
+    <p>Hello, <b>@userName</b> 👋</p>
+}

@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <!-- Target all projects to .NET 8 -->
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- Enable nullable reference types -->
+    <Nullable>enable</Nullable>
+
+    <!-- Enable implicit using directives -->
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Use latest C# language version -->
+    <LangVersion>latest</LangVersion>
+
+    <!-- Treat all warnings as errors for consistency -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Optional: Adjust for test projects if needed -->
+    <!-- <IsTestProject>false</IsTestProject> -->
+  </PropertyGroup>
+</Project>

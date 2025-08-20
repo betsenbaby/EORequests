@@ -1,0 +1,44 @@
+﻿@model EORequests.Web.Controllers.WhoAmIViewModel
+
+@{
+    ViewData["Title"] = "WhoAmI Debug";
+}
+
+<h2>Who Am I</h2>
+
+<div class="card p-3 mb-3">
+    <p><strong>Identity:</strong> @Model.Identity</p>
+    <p><strong>Name:</strong> @Model.Name</p>
+    <p><strong>Email:</strong> @Model.Email</p>
+
+    <p>
+        <strong>Roles:</strong>
+        @if (Model.Roles.Length == 0)
+        {
+            <span>(none)</span>
+        }
+        else
+        {
+            @string.Join(", ", Model.Roles)
+        }
+    </p>
+</div>
+
+<h3>All Claims</h3>
+<table class="table table-bordered table-sm">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var claim in Model.Claims)
+        {
+            <tr>
+                <td>@claim.Type</td>
+                <td>@claim.Value</td>
+            </tr>
+        }
+    </tbody>
+</table>

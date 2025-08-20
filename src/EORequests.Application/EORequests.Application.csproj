@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<AssemblyName>EORequests.Application</AssemblyName>
+		<RootNamespace>EORequests.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\EORequests.Domain\EORequests.Domain.csproj" />
+	</ItemGroup>
+</Project>

@@ -1,0 +1,6 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<AssemblyName>EORequests.Domain</AssemblyName>
+		<RootNamespace>EORequests.Domain</RootNamespace>
+	</PropertyGroup>
+</Project>
