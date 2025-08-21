@@ -6,11 +6,72 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace EORequests.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class Addition_entities : Migration
+    public partial class Initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "activity_log",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
+                    Actor = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    Action = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    EntityType = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    EntityId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    Details = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOn = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    row_version = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_activity_log", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "application_role",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
+                    Name = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOn = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    row_version = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_application_role", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "application_user",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    DisplayName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IndexNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOn = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    row_version = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_application_user", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "request_type",
                 columns: table => new
@@ -31,6 +92,30 @@ namespace EORequests.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "application_user_role",
+                columns: table => new
+                {
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RoleId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_application_user_role", x => new { x.UserId, x.RoleId });
+                    table.ForeignKey(
+                        name: "FK_application_user_role_application_role_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "application_role",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_application_user_role_application_user_UserId",
+                        column: x => x.UserId,
+                        principalTable: "application_user",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "request",
                 columns: table => new
                 {
@@ -41,6 +126,8 @@ namespace EORequests.Infrastructure.Migrations
                     Title = table.Column<string>(type: "nvarchar(400)", maxLength: 400, nullable: false),
                     ReferenceNumber = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     IsClosed = table.Column<bool>(type: "bit", nullable: false),
+                    IsPreview = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    PreviewCreatedOn = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -122,6 +209,7 @@ namespace EORequests.Infrastructure.Migrations
                     AllowCreatorOrPreparer = table.Column<bool>(type: "bit", nullable: false),
                     BranchRuleKey = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
                     JsonSchema = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    JsonSchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false, defaultValue: "v1"),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -317,6 +405,26 @@ namespace EORequests.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "form_response",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
+                    WorkflowStateId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    JsonData = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Summary = table.Column<string>(type: "nvarchar(512)", maxLength: 512, nullable: true),
+                    SchemaVersionCaptured = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: true),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ModifiedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ModifiedOn = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    row_version = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_form_response", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "task_item",
                 columns: table => new
                 {
@@ -406,6 +514,23 @@ namespace EORequests.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_application_role_Name",
+                table: "application_role",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_application_user_Email",
+                table: "application_user",
+                column: "Email",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_application_user_role_RoleId",
+                table: "application_user_role",
+                column: "RoleId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_attachment_LinkedEntityType_LinkedEntityId",
                 table: "attachment",
                 columns: new[] { "LinkedEntityType", "LinkedEntityId" });
@@ -467,10 +592,21 @@ namespace EORequests.Infrastructure.Migrations
                 column: "WorkflowTemplateId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_form_response_WorkflowStateId",
+                table: "form_response",
+                column: "WorkflowStateId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_mention_CommentId_MentionedUserId",
                 table: "mention",
                 columns: new[] { "CommentId", "MentionedUserId" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_request_IsPreview",
+                table: "request",
+                column: "IsPreview");
 
             migrationBuilder.CreateIndex(
                 name: "IX_request_RequestTypeId",
@@ -553,6 +689,14 @@ namespace EORequests.Infrastructure.Migrations
                 principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
+                name: "FK_form_response_workflow_state_WorkflowStateId",
+                table: "form_response",
+                column: "WorkflowStateId",
+                principalTable: "workflow_state",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Cascade);
+
+            migrationBuilder.AddForeignKey(
                 name: "FK_task_item_workflow_state_WorkflowStateId",
                 table: "task_item",
                 column: "WorkflowStateId",
@@ -580,6 +724,12 @@ namespace EORequests.Infrastructure.Migrations
                 table: "workflow_instance");
 
             migrationBuilder.DropTable(
+                name: "activity_log");
+
+            migrationBuilder.DropTable(
+                name: "application_user_role");
+
+            migrationBuilder.DropTable(
                 name: "attachment");
 
             migrationBuilder.DropTable(
@@ -589,10 +739,19 @@ namespace EORequests.Infrastructure.Migrations
                 name: "escalation_rule");
 
             migrationBuilder.DropTable(
+                name: "form_response");
+
+            migrationBuilder.DropTable(
                 name: "mention");
 
             migrationBuilder.DropTable(
                 name: "sla_rule");
+
+            migrationBuilder.DropTable(
+                name: "application_role");
+
+            migrationBuilder.DropTable(
+                name: "application_user");
 
             migrationBuilder.DropTable(
                 name: "task_item");

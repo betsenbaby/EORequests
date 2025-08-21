@@ -1,0 +1,254 @@
+﻿@page "/admin/steps"
+@attribute [Authorize(Policy = "AdminOnly")]
+@using EORequests.Application.Interfaces
+@using Microsoft.EntityFrameworkCore
+@inject IWorkflowStepTemplateService StepsService
+@inject EORequests.Application.Interfaces.IWorkflowPreviewService Preview
+@inject NavigationManager Nav
+@inject EORequests.Web.Security.ICurrentUser Me
+@inject ILogger<EORequests.Web.Pages.Admin.Steps> Log
+
+<PageTitle>Workflow Steps</PageTitle>
+
+<div class="container py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="h4 mb-0">Workflow Steps</h2>
+        <a class="btn btn-outline-primary" href="/admin">
+            <i class="bi bi-gear"></i> Admin Home
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="row g-2 align-items-center mb-3">
+                <div class="col-12 col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input class="form-control" placeholder="Search by template, code, or name…" @bind="_q" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <select class="form-select" @bind="_sortBy">
+                        <option value="template">Sort: Template</option>
+                        <option value="order">Sort: Order</option>
+                        <option value="code">Sort: Code</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 text-end">
+                    <span class="text-muted small">Total: @_filtered.Count</span>
+                </div>
+            </div>
+
+            @if (_rows is null)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status"></div>
+                    <div class="mt-2 text-muted">Loading…</div>
+                </div>
+            }
+            else if (!_filtered.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inboxes" style="font-size:2rem;"></i>
+                    <div class="mt-2">No steps match your filters.</div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:28%">Template</th>
+                                <th style="width:16%">Code</th>
+                                <th style="width:26%">Name</th>
+                                <th style="width:10%">Order</th>
+                                <th style="width:10%">Schema</th>
+                                <th style="width:10%"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _paged)
+                            {
+                                <tr>
+                                    <td class="fw-medium">@r.TemplateName</td>
+                                    <td><span class="badge text-bg-secondary">@r.Code</span></td>
+                                    <td>@r.Name</td>
+                                    <td>@r.StepOrder</td>
+                                    <td>
+                                        @if (r.HasSchema)
+                                        {
+                                            <span class="badge text-bg-success"><i class="bi bi-check-circle"></i> Present</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-warning"><i class="bi bi-exclamation-triangle"></i> Missing</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <a class="btn btn-outline-primary" href="@($"/admin/steps/{r.Id}/schema")">
+                                                <i class="bi bi-pencil-square"></i> Edit
+                                            </a>
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary"
+                                                    disabled="@_previewBusy"
+                                                    @onclick="() => PreviewStep(r.Id)"
+                                                    title="Create a temporary request and open this step's form">
+                                                <i class="bi bi-play-circle"></i> Preview
+                                            </button>
+
+                                            @if (!string.IsNullOrWhiteSpace(_previewError))
+                                            {
+                                                <div class="alert alert-danger mt-3">
+                                                    <i class="bi bi-exclamation-triangle"></i>
+                                                    Preview failed: @_previewError
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="small text-muted">Page @_page of @_totalPages</div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="Prev" disabled="@(_page <= 1)">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="Next" disabled="@(_page >= _totalPages)">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        
+            @if (!string.IsNullOrWhiteSpace(_previewError))
+            {
+                <div class="alert alert-danger mt-3">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Preview failed: @_previewError
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private List<Row>? _rows;
+    private List<Row> _filtered = new();
+    private List<Row> _paged = new();
+
+    private string _q = string.Empty;
+    private string _sortBy = "template";
+    private int _page = 1;
+    private int _pageSize = 12;
+    private int _totalPages = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var rows = await StepsService.GetAllAsync();
+        _rows = rows.Select(r => new Row
+        {
+            Id = r.Step.Id,
+            TemplateName = r.TemplateName,
+            Code = r.Step.Code ?? string.Empty,
+            Name = r.Step.Name ?? string.Empty,
+            StepOrder = r.Step.StepOrder,
+            HasSchema = !string.IsNullOrWhiteSpace(r.Step.JsonSchema)
+        }).ToList();
+
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (_rows is null) return;
+
+        IEnumerable<Row> q = _rows;
+
+        if (!string.IsNullOrWhiteSpace(_q))
+        {
+            var term = _q.Trim();
+            q = q.Where(r =>
+                r.TemplateName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                r.Code.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                r.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+
+        q = _sortBy switch
+        {
+            "order" => q.OrderBy(r => r.StepOrder),
+            "code" => q.OrderBy(r => r.Code),
+            _ => q.OrderBy(r => r.TemplateName).ThenBy(r => r.StepOrder),
+        };
+
+        _filtered = q.ToList();
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+        _page = Math.Clamp(_page, 1, _totalPages);
+        _paged = _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+        StateHasChanged();
+    }
+
+    private void Prev() { _page--; ApplyFilters(); }
+    private void Next() { _page++; ApplyFilters(); }
+
+    private sealed class Row
+    {
+        public Guid Id { get; set; }
+        public string TemplateName { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public int StepOrder { get; set; }
+        public bool HasSchema { get; set; }
+    }
+
+    // Re-run filters when inputs change
+    private string q
+    {
+        get => _q; set { _q = value; _page = 1; ApplyFilters(); }
+    }
+    private string sortBy
+    {
+        get => _sortBy; set { _sortBy = value; _page = 1; ApplyFilters(); }
+    }
+
+
+
+    private string? _previewError;
+    private bool _previewBusy;
+
+    private async Task PreviewStep(Guid stepId)
+    {
+        _previewBusy = true;
+        _previewError = null;
+        StateHasChanged();
+
+        try
+        {
+            var stateId = await Preview.CreatePreviewAtStepAsync(stepId, Me.GetIdOrThrow());
+            Nav.NavigateTo($"/requests/state/{stateId}/form", forceLoad: true);
+        }
+        catch (DbUpdateException ex)
+        {
+            _previewError = ex.GetBaseException().Message; // show inner
+            Log.LogError(ex, "Preview failed for step {StepId}", stepId);
+        }
+        catch (Exception ex)
+        {
+            _previewError = ex.Message;
+            Log.LogError(ex, "Preview failed for step {StepId}", stepId);
+        }
+        finally
+        {
+            _previewBusy = false;
+            StateHasChanged();
+        }
+    }
+
+}

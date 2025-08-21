@@ -1,0 +1,89 @@
+﻿@page "/requests"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@inject EORequests.Infrastructure.Data.EoDbContext Db
+
+<div class="container py-4">
+    <h2 class="h5 mb-3">My Requests</h2>
+
+    @if (_rows is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="alert alert-info">No requests yet.</div>
+    }
+    else
+    {
+        <table class="table table-striped align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Created</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _rows)
+                {
+                    <tr>
+                        <td>@r.Title</td>
+                        <td>@r.Type</td>
+                        <td>@r.CreatedOn.ToLocalTime():g</td>
+                        <td>
+                            @if (r.IsComplete)
+                            {
+                                <span class="badge text-bg-success">Complete</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-warning">In Progress</span>
+                            }
+                        </td>
+                        <td>
+                            <a class="btn btn-sm btn-outline-primary"
+                               href="@($"/requests/{r.RequestId}")">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<Row>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = await Db.Requests
+            .AsNoTracking()
+            .Include(r => r.RequestType)        // singular
+            .Include(r => r.WorkflowInstance)   // singular
+            .OrderByDescending(r => r.CreatedOn)
+            .Take(20)
+            .Select(r => new Row
+            {
+                RequestId = r.Id,
+                Title = r.Title,
+                Type = r.RequestType.Name,
+                CreatedOn = r.CreatedOn,
+                IsComplete = r.WorkflowInstance != null && r.WorkflowInstance.IsComplete
+            })
+            .ToListAsync();
+    }
+
+    private sealed class Row
+    {
+        public Guid RequestId { get; set; }
+        public string Title { get; set; } = "";
+        public string Type { get; set; } = "";
+        public DateTime CreatedOn { get; set; }
+        public bool IsComplete { get; set; }
+    }
+}

@@ -1,0 +1,87 @@
+﻿@page "/requests/state/{stateId:guid}/form"
+@attribute [Authorize]
+@using EORequests.Web.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using EORequests.Application.Interfaces
+@using EORequests.Web.Security
+
+@inject IAuthorizationService Auth
+@inject IWorkflowEngine Engine
+@inject IWorkflowReadService Reads
+@inject ICurrentUser Me
+@inject ILogger<FillStep> Log
+@inject NavigationManager Nav
+
+<CascadingAuthenticationState>
+    @if (_authzChecked && !_authorized)
+    {
+        <div class="container py-4">
+            <div class="alert alert-danger">You don’t have permission to act on this step.</div>
+        </div>
+    }
+    else
+    {
+        <div class="container py-4">
+            <JsonFormWizard @ref="_wiz"
+                            WorkflowStateId="@StateId"
+                            ShowSubmitButton="false"
+                            OnSubmitJson="(_ => Task.CompletedTask)" />
+
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="SubmitAndAdvance" disabled="@(!_authorized)">
+                    Submit &amp; Continue
+                </button>
+                <a class="btn btn-outline-secondary" href="/requests">Back</a>
+            </div>
+        </div>
+    }
+</CascadingAuthenticationState>
+
+@code {
+    [Parameter] public Guid StateId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthStateTask { get; set; } = default!;
+
+    private bool _authorized;
+    private bool _authzChecked;
+    private JsonFormWizard? _wiz;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await AuthStateTask).User;
+
+        var resource = new WorkflowStateResource
+        {
+            WorkflowStateId = StateId,
+            UserId = Me.GetIdOrThrow(),
+            Roles = Me.Roles()
+        };
+
+        var result = await Auth.AuthorizeAsync(principal, resource, "Step_Act");
+        _authorized = result.Succeeded;
+        _authzChecked = true;
+    }
+
+    private async Task SubmitAndAdvance()
+    {
+        if (!_authorized || _wiz is null) return;
+
+        // 1) Save via wizard
+        var saved = await _wiz.SaveAsync();
+        if (!saved) return;
+
+        try
+        {
+            // 2) Advance workflow
+            var instanceId = await Reads.GetInstanceIdByStateIdAsync(StateId);
+            await Engine.AdvanceAsync(instanceId, Me.GetIdOrThrow());
+
+            // 3) Navigate to Request details
+            var requestId = await Reads.GetRequestIdByStateIdAsync(StateId);
+            Nav.NavigateTo($"/requests/{requestId}");
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Submit & advance failed for state {StateId}", StateId);
+        }
+    }
+}

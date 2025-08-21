@@ -1,0 +1,9 @@
+﻿@page "/admin/steps/{id:guid}/schema"
+@using EORequests.Web.Components.Admin
+@attribute [Authorize(Policy = "AdminOnly")]
+
+<StepSchemaEditor StepTemplateId="@Id" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

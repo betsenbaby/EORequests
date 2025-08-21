@@ -1,0 +1,105 @@
+﻿@page "/requests/{requestId:guid}"
+@attribute [Authorize]
+@using Microsoft.EntityFrameworkCore
+@inject EORequests.Infrastructure.Data.EoDbContext Db
+
+<div class="container py-4">
+    @if (_vm is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <h2 class="h5 mb-3">Request: @_vm.Title</h2>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:10%">Order</th>
+                            <th style="width:25%">Step</th>
+                            <th style="width:20%">Status</th>
+                            <th style="width:20%">Assignee</th>
+                            <th style="width:25%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in _vm.States)
+                        {
+                            <tr>
+                                <td>@s.Order</td>
+                                <td><span class="badge text-bg-secondary">@s.Code</span> @s.Name</td>
+                                <td>
+                                    @if (s.IsComplete)
+                                    {
+                                        <span class="badge text-bg-success">Completed</span>
+                                    }
+                                    else if (s.StateCode == "PendingAction")
+                                    {
+
+                                        <span class="badge text-bg-primary">Pending</span>
+                                    }
+                                    else
+                                    {
+
+                                        <span class="badge text-bg-warning">@s.StateCode</span>
+                                    }
+                                </td>
+                                <td>@(s.AssigneeUserId?.ToString() ?? "—")</td>
+                                <td>
+                                    @if (!s.IsComplete && s.StateCode == "PendingAction")
+                                    {
+                                        <a class="btn btn-sm btn-outline-primary" href="@($"/requests/state/{s.StateId}/form")">
+                                            Fill / Act
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid RequestId { get; set; }
+    private VM? _vm;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _vm = await Db.WorkflowInstances
+          .AsNoTracking()
+          .Where(i => i.RequestId == RequestId)
+          .Select(i => new VM
+          {
+              Title = i.Request.Title,
+              States = i.States
+              .OrderBy(s => s.StepTemplate.StepOrder)
+              .Select(s => new Row
+              {
+                  StateId = s.Id,
+                  Code = s.StepTemplate.Code ?? "",
+                  Name = s.StepTemplate.Name ?? "",
+                  Order = s.StepTemplate.StepOrder,
+                  StateCode = s.StateCode.ToString(),
+                  IsComplete = s.IsComplete,
+                  AssigneeUserId = s.AssigneeUserId
+              }).ToList()
+          })
+          .FirstOrDefaultAsync();
+    }
+
+    private sealed class VM { public string Title { get; set; } = ""; public List<Row> States { get; set; } = new(); }
+    private sealed class Row
+    {
+        public Guid StateId { get; set; }
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int Order { get; set; }
+        public string StateCode { get; set; } = "";
+        public bool IsComplete { get; set; }
+        public Guid? AssigneeUserId { get; set; }
+    }
+}

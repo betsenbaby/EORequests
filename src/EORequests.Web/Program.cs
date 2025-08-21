@@ -3,6 +3,7 @@ using EORequests.Domain.Enums;
 using EORequests.Domain.Security;
 using EORequests.Infrastructure.Data;
 using EORequests.Infrastructure.External;
+using EORequests.Infrastructure.Jobs;
 using EORequests.Infrastructure.Services;
 using EORequests.Web.Security;
 using Hangfire;
@@ -18,6 +19,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Win32;
 using Serilog;
 using System.Security.Claims;
 using System.Text.Json;
@@ -225,10 +227,18 @@ builder.Services.AddScoped<IClaimsTransformation, DbRoleClaimsTransformer>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddScoped<IWorkflowEngine, WorkflowEngine>();
-builder.Services.AddSingleton<IBranchRuleEvaluator, BranchRuleEvaluator>();
-builder.Services.AddSingleton<IDomainEventDispatcher, LoggingEventDispatcher>();
+builder.Services.AddScoped<IBranchRuleEvaluator, BranchRuleEvaluator>();
+builder.Services.AddScoped<IDomainEventDispatcher, LoggingEventDispatcher>();
 builder.Services.AddScoped<ISlaService, SlaService>();
 builder.Services.AddScoped<ISlaJobRunner, SlaJobRunner>();
+builder.Services.AddScoped<IFormService, FormService>();
+builder.Services.AddScoped<IWorkflowStepTemplateService, WorkflowStepTemplateService>();
+builder.Services.AddScoped<IWorkflowReadService, WorkflowReadService>();
+builder.Services.AddScoped<IWorkflowPreviewService, WorkflowPreviewService>();
+
+builder.Services.AddScoped<PreviewCleanupJob>();
+
+
 
 // ---------------------------
 
@@ -237,7 +247,8 @@ builder.Services.AddScoped<ISlaJobRunner, SlaJobRunner>();
 builder.Services.AddScoped<IAccessControlService, AccessControlService>();
 
 // Authorization policies for common actions
-builder.Services.AddSingleton<IAuthorizationHandler, StepActionAuthorizationHandler>();
+//builder.Services.AddSingleton<IAuthorizationHandler, StepActionAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, StepActionAuthorizationHandler>();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -342,6 +353,11 @@ RecurringJob.AddOrUpdate<IExternalUserSyncService>(
     s => s.SyncUsersAsync(System.Threading.CancellationToken.None),
     "0 4 * * *");
 
+// Register recurring job(ID stable across deploys)
+RecurringJob.AddOrUpdate<PreviewCleanupJob>(
+    recurringJobId: "preview-cleanup",
+    methodCall: j => j.RunAsync(CancellationToken.None),
+    cronExpression: "0 4 * * *");
 
 app.MapFallbackToPage("/_Host");
 app.Run();

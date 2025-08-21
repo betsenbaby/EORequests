@@ -1,0 +1,132 @@
+﻿@attribute [Authorize(Policy = "AdminOnly")]
+@using EORequests.Web.Contracts
+@using EORequests.Application.Interfaces
+@inject IWorkflowStepTemplateService StepsService
+@inject ILogger<StepSchemaEditor> Log
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h5 mb-0">
+                    <i class="bi bi-code-square"></i> Edit Step Schema
+                </h2>
+                <a class="btn btn-outline-secondary" href="/admin/steps">
+                    <i class="bi bi-arrow-left"></i> Back to Steps
+                </a>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="small text-muted">Step Id:</span>
+                <code class="small">@StepTemplateId</code>
+
+                @if (_busy)
+                {
+                    <span class="badge text-bg-secondary">Working...</span>
+                }
+                else if (_isValidJson)
+                {
+                    <span class="badge text-bg-success"><i class="bi bi-check-circle"></i> JSON valid</span>
+                }
+                else
+                {
+                    <span class="badge text-bg-warning"><i class="bi bi-exclamation-triangle"></i> Invalid JSON</span>
+                }
+
+                <span class="small text-muted ms-auto">@_status</span>
+            </div>
+
+            <textarea class="form-control"
+                      style="min-height: 420px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;"
+                      @bind="_json"
+                      @bind:event="oninput"></textarea>
+            <div class="form-text">
+                Paste the JSON schema used by the form wizard. Click <em>Format</em> to pretty‑print; Save is disabled when JSON is invalid.
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary" @onclick="Save" disabled="@(_busy || !_isValidJson)">
+                    <i class="bi bi-save"></i> Save
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="Format" disabled="@_busy">
+                    <i class="bi bi-magic"></i> Format
+                </button>
+                <button class="btn btn-outline-danger" @onclick="ResetToEmpty" disabled="@_busy">
+                    <i class="bi bi-trash3"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid StepTemplateId { get; set; }
+
+    private string? _json;
+    private bool _busy;
+    private string _status = "";
+    private bool _isValidJson = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _busy = true; _status = "Loading…";
+        try
+        {
+            _json = await StepsService.GetSchemaAsync(StepTemplateId) ?? "";
+            _isValidJson = IsValidJson(_json);
+            _status = "Loaded";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Load schema failed for {Id}", StepTemplateId);
+            _status = "Load failed";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Save()
+    {
+        _busy = true; _status = "Saving…";
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_json))
+                System.Text.Json.JsonDocument.Parse(_json);
+
+            await StepsService.UpdateSchemaAsync(StepTemplateId, _json);
+            _status = "Saved";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Save schema failed for {Id}", StepTemplateId);
+            _status = "Save failed";
+        }
+        finally { _busy = false; }
+    }
+
+    private void Format()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_json)) return;
+            using var doc = System.Text.Json.JsonDocument.Parse(_json);
+           
+            _json = System.Text.Json.JsonSerializer.Serialize(
+            doc.RootElement,
+            options: new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+
+            _isValidJson = true; _status = "Formatted";
+        }
+        catch { _isValidJson = false; _status = "Invalid JSON"; }
+    }
+
+    private void ResetToEmpty() { _json = ""; _isValidJson = true; _status = "Cleared"; }
+
+    private static bool IsValidJson(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return true;
+        try { using var _ = System.Text.Json.JsonDocument.Parse(s); return true; }
+        catch { return false; }
+    }
+}

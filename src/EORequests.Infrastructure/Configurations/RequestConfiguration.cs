@@ -20,6 +20,10 @@ namespace EORequests.Infrastructure.Configurations
              .WithOne(wi => wi.Request)
              .HasForeignKey<WorkflowInstance>(wi => wi.RequestId)
              .OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.IsPreview)
+              .HasDefaultValue(false);
+            b.Property(x => x.PreviewCreatedOn);
+            b.HasIndex(x => x.IsPreview);
         }
     }
 }

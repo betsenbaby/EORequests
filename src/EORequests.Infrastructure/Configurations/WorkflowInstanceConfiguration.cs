@@ -13,14 +13,14 @@ namespace EORequests.Infrastructure.Configurations
             b.Property(x => x.IsComplete).HasDefaultValue(false);
 
             b.HasOne(x => x.Request)
-             .WithOne(r => r.WorkflowInstance)
-             .HasForeignKey<WorkflowInstance>(x => x.RequestId);
+            .WithOne(r => r.WorkflowInstance)
+            .HasForeignKey<WorkflowInstance>(x => x.RequestId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            b.HasOne(x => x.CurrentState)
-             .WithOne()
-             .HasForeignKey<WorkflowInstance>(x => x.CurrentStepId)
-             .HasPrincipalKey<WorkflowState>(ws => ws.Id)
-             .OnDelete(DeleteBehavior.NoAction); // avoid cycles
+            b.HasOne(x => x.CurrentStep)
+            .WithMany()
+            .HasForeignKey(x => x.CurrentStepId)
+            .OnDelete(DeleteBehavior.Restrict); // or NoAction
         }
     }
 }

@@ -1,0 +1,377 @@
+﻿@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using EORequests.Application.Interfaces
+@using EORequests.Web.Forms
+@inject IFormService FormService
+@inject ILogger<JsonFormWizard> Log
+
+@if (Loading || _editCtx is null)
+{
+    <p>Loading form…</p>
+}
+else if (Schema is null)
+{
+    <p>No form schema found.</p>
+}
+else
+{
+    <EditForm EditContext="_editCtx" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <h3>@Schema.Title</h3>
+
+        @foreach (var f in Schema.Fields)
+        {
+            var visible = IsVisible(f);
+            if (!visible) { continue; }
+
+            <div class="mb-3 @FadeClass(f.Id, visible)">
+                <label class="form-label">
+                    @f.Label
+                    @if (f.Required)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
+
+                @switch (f.Type)
+                {
+                    case "text":
+                        <input class="form-control"
+                               value="@GetString(f.Id)"
+                               placeholder="@f.Placeholder"
+                               @onchange="(e => SetString(f.Id, e.Value?.ToString()))" />
+                        break;
+
+                    case "textarea":
+                        <textarea class="form-control"
+                                  placeholder="@f.Placeholder"
+                                  @onchange="(e => SetString(f.Id, e.Value?.ToString()))">@GetString(f.Id)</textarea>
+                        break;
+
+                    case "number":
+                        <input class="form-control" type="number"
+                               value="@GetNumberString(f.Id)"
+                               @onchange="(e => SetNumber(f.Id, e.Value?.ToString()))" />
+                        break;
+
+                    case "date":
+                        <input class="form-control" type="date"
+                               value="@GetDateString(f.Id)"
+                               @onchange="(e => SetDate(f.Id, e.Value?.ToString()))" />
+                        break;
+
+                    case "checkbox":
+                        <input class="form-check-input" type="checkbox"
+                               checked="@GetBool(f.Id)"
+                               @onchange="(e => SetBool(f.Id, (bool?)e.Value == true))" />
+                        break;
+
+                    case "radio":
+                        @foreach (var opt in f.Options ?? new())
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio"
+                                       name="@f.Id" value="@opt.Value"
+                                       checked="@(GetString(f.Id) == opt.Value)"
+                                       @onchange="(e => SetString(f.Id, opt.Value))" />
+                                <label class="form-check-label">@opt.Text</label>
+                            </div>
+                        }
+                        break;
+
+                    case "select":
+                        <select class="form-select"
+                                value="@GetString(f.Id)"
+                                @onchange="(e => SetString(f.Id, e.Value?.ToString()))">
+                            <option value="">-- select --</option>
+                            @foreach (var opt in f.Options ?? new())
+                            {
+                                <option value="@opt.Value">@opt.Text</option>
+                            }
+                        </select>
+                        break;
+
+                    case "file":
+                        <InputFile OnChange="(args => OnFilesSelected(f.Id, args))" />
+                        @if (Files.TryGetValue(f.Id, out var names) && names.Count > 0)
+                        {
+                            <ul class="mt-2">
+                                @foreach (var n in names)
+                                {
+                                    <li>@n</li>
+                                }
+                            </ul>
+                        }
+                        break;
+
+                    default:
+                        <input class="form-control"
+                               value="@GetString(f.Id)"
+                               @onchange="(e => SetString(f.Id, e.Value?.ToString()))" />
+                        break;
+                }
+
+                @if (!string.IsNullOrWhiteSpace(f.Help))
+                {
+                    <small class="text-muted">@f.Help</small>
+                }
+
+                @if (f.Required && HasError(f.Id))
+                {
+                    <div class="text-danger">This field is required.</div>
+                }
+            </div>
+        }
+
+        @if (ShowSubmitButton)
+        {
+            <button type="submit" class="btn btn-primary">@SubmitLabel</button>
+            <span class="ms-2 small text-muted">@_status</span>
+        }
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid WorkflowStateId { get; set; }
+    [Parameter] public EventCallback<string> OnSubmitJson { get; set; }
+
+    // NEW: host controls whether to show the internal button
+    [Parameter] public bool ShowSubmitButton { get; set; } = true;
+    [Parameter] public string SubmitLabel { get; set; } = "Save";
+
+    private FormSchema? Schema;
+    private bool Loading = true;
+    private string _status = "";
+
+    // dynamic model buckets
+    private readonly Dictionary<string, string?> Str = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> Bool = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, double?> Num = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime?> Dat = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<string>> Files = new(StringComparer.OrdinalIgnoreCase);
+
+    // EditForm support
+    private Dictionary<string, object?> _formModel = new(StringComparer.OrdinalIgnoreCase);
+    private EditContext? _editCtx;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Loading = true;
+        _status = "Loading…";
+
+        // reset transient state
+        Str.Clear(); Bool.Clear(); Num.Clear(); Dat.Clear(); Files.Clear();
+        _formModel = new(StringComparer.OrdinalIgnoreCase);
+        _editCtx = null;
+
+        try
+        {
+            var jsonSchema = await FormService.GetSchemaAsync(WorkflowStateId);
+            if (!string.IsNullOrWhiteSpace(jsonSchema))
+            {
+                Schema = JsonSerializer.Deserialize<FormSchema>(
+                    jsonSchema,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+
+            var resp = await FormService.GetResponseAsync(WorkflowStateId);
+            if (resp is not null && !string.IsNullOrWhiteSpace(resp.JsonData))
+            {
+                try
+                {
+                    var el = JsonSerializer.Deserialize<JsonElement>(resp.JsonData);
+                    if (el.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var p in el.EnumerateObject())
+                        {
+                            switch (p.Value.ValueKind)
+                            {
+                                case JsonValueKind.True:
+                                case JsonValueKind.False:
+                                    Bool[p.Name] = p.Value.GetBoolean();
+                                    _formModel[p.Name] = Bool[p.Name];
+                                    break;
+
+                                case JsonValueKind.Number:
+                                    if (p.Value.TryGetDouble(out var dNum))
+                                    {
+                                        Num[p.Name] = dNum;
+                                        _formModel[p.Name] = dNum;
+                                    }
+                                    break;
+
+                                case JsonValueKind.String:
+                                    var s = p.Value.GetString();
+                                    if (DateTime.TryParse(s, out var dt))
+                                    {
+                                        Dat[p.Name] = dt;
+                                        _formModel[p.Name] = dt.ToString("yyyy-MM-dd");
+                                        Str[p.Name] = s;
+                                    }
+                                    else
+                                    {
+                                        Str[p.Name] = s;
+                                        _formModel[p.Name] = s;
+                                    }
+                                    break;
+
+                                default:
+                                    Str[p.Name] = p.Value.ToString();
+                                    _formModel[p.Name] = Str[p.Name];
+                                    break;
+                            }
+                        }
+                    }
+                }
+                catch { /* ignore malformed saved JSON */ }
+            }
+
+            if (Schema is not null)
+            {
+                foreach (var f in Schema.Fields)
+                    if (!_formModel.ContainsKey(f.Id))
+                        _formModel[f.Id] = null;
+            }
+
+            _editCtx = new EditContext(_formModel);
+            _status = "Ready";
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "JsonFormWizard init failed for state {StateId}", WorkflowStateId);
+            _status = "Load failed";
+        }
+        finally { Loading = false; }
+    }
+
+    // Fade-in support
+    private readonly HashSet<string> _visibleNow = new();
+    private readonly HashSet<string> _visiblePrev = new();
+    protected override void OnAfterRender(bool firstRender)
+    {
+        _visiblePrev.Clear();
+        foreach (var id in _visibleNow) _visiblePrev.Add(id);
+        _visibleNow.Clear();
+    }
+    private string FadeClass(string id, bool visible)
+    {
+        if (!visible) return "";
+        _visibleNow.Add(id);
+        var wasVisible = _visiblePrev.Contains(id);
+        return wasVisible ? "" : "jf-fade";
+    }
+
+    private bool IsVisible(FormField f)
+    {
+        if (Schema is null || string.IsNullOrWhiteSpace(f.VisibleWhen)) return true;
+
+        var flat = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in Str) flat[kv.Key] = kv.Value;
+        foreach (var kv in Bool) flat[kv.Key] = kv.Value;
+        foreach (var kv in Num) flat[kv.Key] = kv.Value;
+        foreach (var kv in Dat) flat[kv.Key] = kv.Value?.ToString("yyyy-MM-dd");
+
+        var json = JsonSerializer.Serialize(flat);
+        var el = JsonSerializer.Deserialize<JsonElement>(json);
+        return ExpressionEval.IsVisible(f.VisibleWhen, el);
+    }
+
+    private bool HasError(string id)
+    {
+        var f = Schema?.Fields.FirstOrDefault(x => x.Id == id);
+        if (f is null || !f.Required) return false;
+
+        if (Str.TryGetValue(id, out var s)) return string.IsNullOrWhiteSpace(s);
+        if (Bool.ContainsKey(id)) return false;
+        if (Num.TryGetValue(id, out var n)) return n is null;
+        if (Dat.TryGetValue(id, out var d)) return d is null;
+
+        return !Str.ContainsKey(id) && !Bool.ContainsKey(id) && !Num.ContainsKey(id) && !Dat.ContainsKey(id);
+    }
+
+    // getters/setters keep model + formModel in sync
+    private string GetString(string id) => Str.TryGetValue(id, out var v) ? v ?? "" : "";
+    private void SetString(string id, string? v) { var val = v ?? ""; Str[id] = val; _formModel[id] = val; StateHasChanged(); }
+
+    private string GetNumberString(string id) =>
+        Num.TryGetValue(id, out var v) && v.HasValue ? v.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "";
+    private void SetNumber(string id, string? v)
+    {
+        if (double.TryParse(v, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
+        { Num[id] = d; _formModel[id] = d; }
+        else { Num[id] = null; _formModel[id] = null; }
+        StateHasChanged();
+    }
+
+    private string GetDateString(string id) =>
+        Dat.TryGetValue(id, out var v) && v.HasValue ? v.Value.ToString("yyyy-MM-dd") : "";
+    private void SetDate(string id, string? v)
+    {
+        if (DateTime.TryParse(v, out var d)) { Dat[id] = d; _formModel[id] = d.ToString("yyyy-MM-dd"); }
+        else { Dat[id] = null; _formModel[id] = null; }
+        StateHasChanged();
+    }
+
+    private bool GetBool(string id) => Bool.TryGetValue(id, out var v) && v;
+    private void SetBool(string id, bool v) { Bool[id] = v; _formModel[id] = v; StateHasChanged(); }
+
+    private void OnFilesSelected(string id, InputFileChangeEventArgs args)
+    {
+        Files[id] = args.GetMultipleFiles().Select(f => f.Name).ToList();
+        _formModel[id] = Files[id];
+    }
+
+    // PUBLIC: allow host page to trigger save
+    public async Task<bool> SaveAsync() => await HandleSubmit();
+
+    // internal submit: builds JSON and persists
+    private async Task<bool> HandleSubmit()
+    {
+        if (Schema is null) return false;
+
+        var invalid = Schema.Fields.Where(f => f.Required && IsVisible(f))
+                                   .Any(f => HasError(f.Id));
+        if (invalid)
+        {
+            _status = "Please fill required fields.";
+            StateHasChanged();
+            return false;
+        }
+
+        var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in Schema.Fields)
+        {
+            if (!IsVisible(f)) continue;
+
+            if (Bool.TryGetValue(f.Id, out var b)) payload[f.Id] = b;
+            else if (Num.TryGetValue(f.Id, out var n)) payload[f.Id] = n;
+            else if (Dat.TryGetValue(f.Id, out var d)) payload[f.Id] = d?.ToString("yyyy-MM-dd");
+            else if (Str.TryGetValue(f.Id, out var s)) payload[f.Id] = s;
+            else if (Files.TryGetValue(f.Id, out var list) && list.Count > 0) payload[f.Id] = list;
+        }
+
+        var json = JsonSerializer.Serialize(payload);
+        try
+        {
+            await FormService.UpsertResponseAsync(
+                WorkflowStateId,
+                json,
+                summary: payload.TryGetValue("title", out var t) ? t?.ToString() : null);
+
+            if (OnSubmitJson.HasDelegate) await OnSubmitJson.InvokeAsync(json);
+
+            _status = "Saved";
+            Log.LogInformation("Form submitted for state {StateId}", WorkflowStateId);
+            StateHasChanged();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _status = "Save failed";
+            Log.LogError(ex, "Save failed for state {StateId}", WorkflowStateId);
+            StateHasChanged();
+            return false;
+        }
+    }
+}

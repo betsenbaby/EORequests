@@ -19,5 +19,9 @@ namespace EORequests.Domain.Entities
 
         public ICollection<CommentThread> CommentThreads { get; set; } = new List<CommentThread>();
         public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+
+        public bool IsPreview { get; set; }           // default: false
+        public DateTime? PreviewCreatedOn { get; set; } // set when IsPreview=true
+
     }
 }

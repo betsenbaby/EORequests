@@ -21,6 +21,9 @@ namespace EORequests.Infrastructure.Configurations
              .WithMany(wt => wt.Steps)
              .HasForeignKey(x => x.WorkflowTemplateId)
              .OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.JsonSchemaVersion)
+             .HasMaxLength(32)
+             .HasDefaultValue("v1");
         }
     }
 }

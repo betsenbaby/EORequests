@@ -10,11 +10,16 @@ namespace EORequests.Infrastructure.Data;
 
 public class EoDbContext : DbContext
 {
-    private readonly IHttpContextAccessor _http;
+    private readonly IHttpContextAccessor? _httpContext;
 
-    public EoDbContext(DbContextOptions<EoDbContext> options, IHttpContextAccessor http) : base(options)
+    public EoDbContext(DbContextOptions<EoDbContext> options) : base(options)
     {
-        _http = http;
+    }
+
+    public EoDbContext(DbContextOptions<EoDbContext> options, IHttpContextAccessor httpContext)
+        : base(options)
+    {
+        _httpContext = httpContext;
     }
 
     public DbSet<ApplicationUser> ApplicationUsers => Set<ApplicationUser>();
@@ -37,6 +42,7 @@ public class EoDbContext : DbContext
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<CommentReaction> CommentReactions => Set<CommentReaction>();
     public DbSet<Mention> Mentions => Set<Mention>();
+    public DbSet<FormResponse> FormResponses => Set<FormResponse>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -81,8 +87,9 @@ public class EoDbContext : DbContext
     private void ApplyAuditStamps()
     {
         var now = DateTime.UtcNow;
-        var email = _http.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value
-                 ?? _http.HttpContext?.User?.Identity?.Name;
+
+        var email = _httpContext?.HttpContext?.User?.FindFirst(ClaimTypes.Email)?.Value
+                 ?? _httpContext?.HttpContext?.User?.Identity?.Name;
 
         foreach (var e in ChangeTracker.Entries<AuditableEntity>())
         {

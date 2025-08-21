@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EORequests.Infrastructure.Migrations
 {
     [DbContext(typeof(EoDbContext))]
-    [Migration("20250820141627_Step1_DomainModel")]
-    partial class Step1_DomainModel
+    [Migration("20250821015316_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -349,6 +349,55 @@ namespace EORequests.Infrastructure.Migrations
                     b.ToTable("escalation_rule", (string)null);
                 });
 
+            modelBuilder.Entity("EORequests.Domain.Entities.FormResponse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("JsonData")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("SchemaVersionCaptured")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid>("WorkflowStateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkflowStateId")
+                        .IsUnique();
+
+                    b.ToTable("form_response", (string)null);
+                });
+
             modelBuilder.Entity("EORequests.Domain.Entities.Mention", b =>
                 {
                     b.Property<Guid>("Id")
@@ -408,6 +457,11 @@ namespace EORequests.Infrastructure.Migrations
                     b.Property<bool>("IsClosed")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPreview")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
@@ -416,6 +470,9 @@ namespace EORequests.Infrastructure.Migrations
 
                     b.Property<Guid?>("PreparedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PreviewCreatedOn")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ReferenceNumber")
                         .HasMaxLength(100)
@@ -437,6 +494,8 @@ namespace EORequests.Infrastructure.Migrations
                         .HasColumnType("nvarchar(400)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsPreview");
 
                     b.HasIndex("RequestTypeId");
 
@@ -735,6 +794,13 @@ namespace EORequests.Infrastructure.Migrations
                     b.Property<string>("JsonSchema")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("JsonSchemaVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("v1");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
@@ -995,6 +1061,17 @@ namespace EORequests.Infrastructure.Migrations
                         .HasForeignKey("WorkflowTemplateId");
 
                     b.Navigation("StepTemplate");
+                });
+
+            modelBuilder.Entity("EORequests.Domain.Entities.FormResponse", b =>
+                {
+                    b.HasOne("EORequests.Domain.Entities.WorkflowState", "WorkflowState")
+                        .WithOne()
+                        .HasForeignKey("EORequests.Domain.Entities.FormResponse", "WorkflowStateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WorkflowState");
                 });
 
             modelBuilder.Entity("EORequests.Domain.Entities.Mention", b =>

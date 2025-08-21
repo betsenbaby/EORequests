@@ -28,6 +28,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\EORequests.Infrastructure\EORequests.Infrastructure.csproj" />
 	  <ProjectReference Include="..\..\src\EORequests.Domain\EORequests.Domain.csproj" />
+	  <ProjectReference Include="..\..\src\EORequests.Web\EORequests.Web.csproj" />
 	</ItemGroup>
 
 </Project>

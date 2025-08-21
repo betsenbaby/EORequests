@@ -17,6 +17,7 @@ namespace EORequests.Domain.Entities
 
         public string? BranchRuleKey { get; set; }           // optional branch/skip rule key
         public string? JsonSchema { get; set; }              // dynamic form schema for this step
+        public string JsonSchemaVersion { get; set; } = "v1"; //
 
         public WorkflowTemplate WorkflowTemplate { get; set; } = default!;
         public ICollection<SlaRule> SlaRules { get; set; } = new List<SlaRule>();

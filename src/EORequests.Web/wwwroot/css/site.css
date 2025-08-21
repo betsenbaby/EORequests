@@ -66,3 +66,41 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+/* Make card shadows soft */
+.card {
+    border-radius: 0.75rem;
+}
+
+/* Sticky table header inside responsive wrapper */
+.table-responsive {
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Tighten small badges in tables */
+.badge {
+    font-weight: 500;
+}
+
+/* Smooth field reveal for JSON form wizard */
+@keyframes jf-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.jf-fade {
+    animation: jf-fade-in 120ms ease-out;
+}
