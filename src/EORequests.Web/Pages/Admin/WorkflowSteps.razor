@@ -1,0 +1,62 @@
+﻿@page "/admin/workflows/{id:guid}/steps"
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject EORequests.Application.Interfaces.IWorkflowTemplateService Templates
+@inject EORequests.Application.Interfaces.IWorkflowStepTemplateService Steps
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Steps — @(_wfName ?? "…")</h2>
+        <a class="btn btn-outline-secondary" href="/admin/workflows">Back</a>
+    </div>
+
+    <div class="mb-3">
+        <button class="btn btn-sm btn-primary" @onclick="NewStep">Add Step</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Renumber">Renumber</button>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead class="table-light">
+                <tr><th>Order</th><th>Code</th><th>Name</th><th>Assignment</th><th>Schema</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var s in _rows)
+                {
+                    <tr>
+                        <td>@s.StepOrder</td>
+                        <td><span class="badge text-bg-secondary">@s.Code</span></td>
+                        <td>@s.Name</td>
+                        <td>@s.AssignmentMode</td>
+                        <td>@(s.HasSchema ? "Yes" : "No")</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="@($"/admin/steps/{s.Id}/edit")">Edit</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="@($"/admin/steps/{s.Id}/schema")">Schema</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private string? _wfName;
+    private IReadOnlyList<EORequests.Application.Interfaces.StepListItem>? _rows;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var wf = await Templates.GetAsync(Id);
+        _wfName = wf?.Name;
+        _rows = await Steps.ListForTemplateAsync(Id);
+    }
+
+    private void NewStep() => Nav.NavigateTo($"/admin/steps/new?wfId={Id}");
+    private async Task Renumber() { await Steps.RenumberAsync(Id); _rows = await Steps.ListForTemplateAsync(Id); StateHasChanged(); }
+}

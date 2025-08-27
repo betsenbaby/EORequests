@@ -1,0 +1,17 @@
+﻿@page "/admin"
+@attribute [Authorize(Policy = "AdminOnly")]
+
+<div class="container py-4">
+    <h2 class="h4 mb-3">Admin</h2>
+    <div class="list-group">
+        <a class="list-group-item list-group-item-action" href="/admin/workflows">
+            Workflows
+        </a>
+        <a class="list-group-item list-group-item-action" href="/admin/steps">
+            Workflow Steps (All)
+        </a>
+        <a class="list-group-item list-group-item-action" href="/admin/requesttypes">
+            Request Types
+        </a>
+    </div>
+</div>

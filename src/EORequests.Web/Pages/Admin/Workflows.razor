@@ -1,0 +1,44 @@
+﻿@page "/admin/workflows"
+@attribute [Authorize(Policy = "AdminOnly")]
+@inject EORequests.Application.Interfaces.IWorkflowTemplateService Svc
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0">Workflows</h2>
+        <a class="btn btn-primary" href="/admin/workflows/new">New</a>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead class="table-light">
+                <tr><th>Code</th><th>Name</th><th>Type</th><th>Status</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _rows)
+                {
+                    <tr>
+                        <td><span class="badge text-bg-secondary">@r.Code</span></td>
+                        <td>@r.Name</td>
+                        <td>@r.RequestTypeName</td>
+                        <td>@(r.IsActive ? "Active" : "Archived")</td>
+                        <td>@r.CreatedOn.ToLocalTime()</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="@($"/admin/workflows/{r.Id}/edit")">Edit</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="@($"/admin/workflows/{r.Id}/steps")">Steps</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<EORequests.Application.Interfaces.WorkflowTemplateListItem>? _rows;
+    protected override async Task OnInitializedAsync() => _rows = await Svc.ListAsync();
+}

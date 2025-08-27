@@ -1,0 +1,121 @@
+﻿@page "/admin/workflows/new"
+@page "/admin/workflows/{id:guid}/edit"
+@attribute [Authorize(Policy = "AdminOnly")]
+@using Microsoft.AspNetCore.Components.Forms
+@inject EORequests.Application.Interfaces.IWorkflowTemplateService Svc
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <h2 class="h5 mb-3">@(_isNew ? "New Workflow" : "Edit Workflow")</h2>
+
+    @if (_vm is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <EditForm Model="_vm" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Request Type</label>
+                    <select class="form-select" @bind="_vm.RequestTypeId">
+                        @foreach (var rt in _types)
+                        {
+                            <option value="@rt.Id">@rt.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Code</label>
+                    <input class="form-control" @bind="_vm.Code" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Name</label>
+                    <input class="form-control" @bind="_vm.Name" />
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" @bind="_vm.IsActive" />
+                        <label class="form-check-label">Active</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save</button>
+                <a class="btn btn-outline-secondary" href="/admin/workflows">Back</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private bool _isNew => !Id.HasValue;
+
+    // Mutable VM safe for @bind
+    private WorkflowVm? _vm;
+    private List<(Guid Id, string Name)> _types = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _types = (await Svc.ListRequestTypesAsync()).ToList();
+
+        if (_isNew)
+        {
+            var firstTypeId = _types.FirstOrDefault().Id;
+            _vm = new WorkflowVm
+            {
+                Id = Guid.Empty,
+                RequestTypeId = firstTypeId,
+                Code = "",
+                Name = "",
+                IsActive = true
+            };
+        }
+        else
+        {
+            var dto = await Svc.GetAsync(Id!.Value);
+            if (dto is null) { Nav.NavigateTo("/admin/workflows"); return; }
+            _vm = new WorkflowVm
+            {
+                Id = dto.Id,
+                RequestTypeId = dto.RequestTypeId,
+                Code = dto.Code,
+                Name = dto.Name,
+                IsActive = dto.IsActive
+            };
+        }
+    }
+
+    // Match EventCallback<EditContext> to avoid CS1662
+    private async Task HandleValidSubmit(EditContext _)
+    {
+        if (_vm is null) return;
+
+        var dto = new EORequests.Application.Interfaces.WorkflowTemplateDto(
+            _vm.Id, _vm.RequestTypeId, _vm.Code ?? "", _vm.Name ?? "", _vm.IsActive
+        );
+
+        if (_isNew)
+        {
+            var id = await Svc.CreateAsync(dto);
+            Nav.NavigateTo($"/admin/workflows/{id}/steps");
+        }
+        else
+        {
+            await Svc.UpdateAsync(dto);
+            Nav.NavigateTo("/admin/workflows");
+        }
+    }
+
+    private sealed class WorkflowVm
+    {
+        public Guid Id { get; set; }
+        public Guid RequestTypeId { get; set; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public bool IsActive { get; set; }
+    }
+}

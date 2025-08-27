@@ -3,6 +3,7 @@ using EORequests.Domain.Enums;
 using EORequests.Domain.Security;
 using EORequests.Infrastructure.Data;
 using EORequests.Infrastructure.External;
+using EORequests.Infrastructure.Interfaces;
 using EORequests.Infrastructure.Jobs;
 using EORequests.Infrastructure.Services;
 using EORequests.Web.Security;
@@ -235,6 +236,9 @@ builder.Services.AddScoped<IFormService, FormService>();
 builder.Services.AddScoped<IWorkflowStepTemplateService, WorkflowStepTemplateService>();
 builder.Services.AddScoped<IWorkflowReadService, WorkflowReadService>();
 builder.Services.AddScoped<IWorkflowPreviewService, WorkflowPreviewService>();
+builder.Services.AddScoped<IWorkflowTemplateService, WorkflowTemplateService>();
+builder.Services.AddScoped<IWorkflowStepTemplateService, WorkflowStepTemplateService>();
+
 
 builder.Services.AddScoped<PreviewCleanupJob>();
 
