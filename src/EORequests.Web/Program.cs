@@ -238,6 +238,10 @@ builder.Services.AddScoped<IWorkflowReadService, WorkflowReadService>();
 builder.Services.AddScoped<IWorkflowPreviewService, WorkflowPreviewService>();
 builder.Services.AddScoped<IWorkflowTemplateService, WorkflowTemplateService>();
 builder.Services.AddScoped<IWorkflowStepTemplateService, WorkflowStepTemplateService>();
+builder.Services.AddScoped<ISlaAdminService, SlaAdminService>();
+builder.Services.AddScoped<IWorkflowPermissionReadService, WorkflowPermissionReadService>();
+builder.Services.AddScoped<IRequestTypeAdminService, RequestTypeAdminService>();
+
 
 
 builder.Services.AddScoped<PreviewCleanupJob>();

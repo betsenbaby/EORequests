@@ -2,11 +2,14 @@
 
 namespace EORequests.Domain.Entities
 {
-    public class SlaRule : AuditableEntity
+    public sealed class SlaRule : AuditableEntity
     {
         public Guid WorkflowStepTemplateId { get; set; }
-        public int DueDays { get; set; }             // simplistic SLA: N calendar days
+        public int DueDays { get; set; }
+        public string ReminderOffsetsCsv { get; set; } = "";
+        public int? EscalationOffsetDays { get; set; }
+        public bool IsActive { get; set; } = true;
 
-        public WorkflowStepTemplate StepTemplate { get; set; } = default!;
+        public WorkflowStepTemplate? WorkflowStepTemplate { get; set; }
     }
 }

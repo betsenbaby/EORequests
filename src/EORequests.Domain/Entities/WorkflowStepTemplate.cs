@@ -20,7 +20,7 @@ namespace EORequests.Domain.Entities
         public string JsonSchemaVersion { get; set; } = "v1"; //
 
         public WorkflowTemplate WorkflowTemplate { get; set; } = default!;
-        public ICollection<SlaRule> SlaRules { get; set; } = new List<SlaRule>();
+        public SlaRule? SlaRule { get; set; }
         public ICollection<EscalationRule> EscalationRules { get; set; } = new List<EscalationRule>();
     }
 }

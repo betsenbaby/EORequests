@@ -1,0 +1,51 @@
+﻿@page "/admin/workflow/{WorkflowTemplateId:guid}/permissions"
+@using EORequests.Application.Interfaces
+@inject IWorkflowPermissionReadService Perms
+
+<h5>Permission Matrix</h5>
+
+@if (_rows is null)
+{
+    <div>Loading…</div>
+}
+else
+{
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>Step</th>
+                @foreach (var role in _allRoles)
+                {
+                    <th>@role</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var (row, idx) in _rows.Select((r, i) => (r, i + 1)))
+            {
+                <tr>
+                    <td>@idx</td>
+                    <td><b>@row.StepCode</b> — @row.StepName</td>
+                    @foreach (var role in _allRoles)
+                    {
+                        var can = row.RoleCanAct.TryGetValue(role, out var v) && v;
+                        <td>@(can ? "Yes" : "No")</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public Guid WorkflowTemplateId { get; set; }
+    private IReadOnlyList<PermissionMatrixRow>? _rows;
+    private List<string> _allRoles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = await Perms.GetMatrixAsync(WorkflowTemplateId);
+        _allRoles = _rows.SelectMany(r => r.RoleCanAct.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+    }
+}

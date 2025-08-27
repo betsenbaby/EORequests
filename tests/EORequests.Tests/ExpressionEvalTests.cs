@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
-using EORequests.Web.Forms;
+using EORequests.Web.Components.Forms;
 
 
 namespace EORequests.Tests

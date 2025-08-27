@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace EORequests.Web.Forms
+namespace EORequests.Web.Components.Forms
 {
     public static class ExpressionEval
     {
@@ -39,7 +39,7 @@ namespace EORequests.Web.Forms
                     bool cond = Compare(GetValue(model, field), op, lit);
 
                     if (current is null) current = cond;
-                    else current = pendingOp == "&&" ? (current.Value && cond) : (current.Value || cond);
+                    else current = pendingOp == "&&" ? current.Value && cond : current.Value || cond;
 
                     pendingOp = null;
                 }

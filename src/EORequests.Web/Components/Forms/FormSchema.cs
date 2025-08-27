@@ -1,4 +1,4 @@
-﻿namespace EORequests.Web.Forms
+﻿namespace EORequests.Web.Components.Forms
 {
     public class FormSchema
     {

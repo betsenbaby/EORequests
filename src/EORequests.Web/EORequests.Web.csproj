@@ -25,4 +25,8 @@
 		<ProjectReference Include="..\EORequests.Application\EORequests.Application.csproj" />
 		<ProjectReference Include="..\EORequests.Infrastructure\EORequests.Infrastructure.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Components\Tables\" />
+	</ItemGroup>
 </Project>

@@ -1,0 +1,8 @@
+﻿@* Shared/Components/Widgets/Tabs.razor *@
+<ul class="nav nav-tabs" role="tablist">
+    @ChildContent
+</ul>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

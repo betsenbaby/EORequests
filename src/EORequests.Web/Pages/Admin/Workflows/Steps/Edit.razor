@@ -1,0 +1,277 @@
+﻿@page "/admin/steps/new"
+@page "/admin/steps/{id:guid}/edit"
+@attribute [Authorize(Policy = "AdminOnly")]
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
+@using EORequests.Application.Interfaces
+@using EORequests.Application.DTOs.Sla
+@inject IWorkflowStepTemplateService Steps
+@inject ISlaAdminService SlaAdmin
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <h2 class="h5 mb-3">@(_isNew ? "New Step" : "Edit Step")</h2>
+
+    @if (_vm is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="step-tab" data-bs-toggle="tab" data-bs-target="#step-pane" type="button" role="tab" aria-controls="step-pane" aria-selected="true">
+                    Step
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(_isNew ? "disabled" : "")" id="sla-tab" data-bs-toggle="tab" data-bs-target="#sla-pane" type="button" role="tab" aria-controls="sla-pane" aria-selected="false" disabled="@_isNew">
+                    SLA
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- STEP TAB -->
+            <div class="tab-pane fade show active" id="step-pane" role="tabpanel" aria-labelledby="step-tab">
+                <EditForm Model="_vm" OnValidSubmit="HandleValidSubmit">
+                    <DataAnnotationsValidator />
+                    <div class="row g-3 mt-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Order</label>
+                            <input class="form-control" type="number" @bind="_vm.StepOrder" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Code</label>
+                            <input class="form-control" @bind="_vm.Code" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Name</label>
+                            <input class="form-control" @bind="_vm.Name" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Assignment Mode</label>
+                            <select class="form-select" @bind="_vm.AssignmentMode">
+                                <option>AutoAssign</option>
+                                <option>RoleBased</option>
+                                <option>SelectedByPreviousStep</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-8">
+                            <label class="form-label">Allowed Roles (CSV)</label>
+                            <input class="form-control" @bind="_vm.AllowedRolesCsv" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" @bind="_vm.AllowCreatorOrPreparer" />
+                                <label class="form-check-label">Allow Creator/Preparer</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 d-flex gap-2">
+                        <button class="btn btn-primary" type="submit">Save</button>
+                        <a class="btn btn-outline-secondary" href="@($"/admin/workflows/{_vm.WorkflowTemplateId}/steps")">Back</a>
+                    </div>
+                </EditForm>
+            </div>
+
+            <!-- SLA TAB -->
+            <div class="tab-pane fade" id="sla-pane" role="tabpanel" aria-labelledby="sla-tab">
+                @if (_isNew)
+                {
+                    <div class="alert alert-info mt-3">
+                        Save the step first to configure its SLA.
+                    </div>
+                }
+                else if (!_slaLoaded)
+                {
+                    <div class="text-muted mt-3">Loading SLA…</div>
+                }
+                else
+                {
+                    <EditForm Model="_sla" OnValidSubmit="SaveSlaAsync">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="row g-3 mt-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Due (days)</label>
+                                <InputNumber class="form-control" @bind-Value="_sla.DueDays" />
+                                <div class="form-text">Total days allowed for this step.</div>
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label">Reminders (days before due)</label>
+                                <InputText class="form-control" @bind-Value="_sla.ReminderOffsetsCsv" />
+                                <div class="form-text">Comma-separated positive integers; each &lt; Due (e.g., 3,1).</div>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Escalation (days after due)</label>
+                                <InputNumber class="form-control" @bind-Value="_sla.EscalationOffsetDays" />
+                                <div class="form-text">Optional. Positive integer (e.g., 1 = T+1).</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="form-check mt-2">
+                                    <InputCheckbox class="form-check-input" @bind-Value="_sla.IsActive" />
+                                    <label class="form-check-label">Active</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Save SLA</button>
+                            </div>
+                        </div>
+                    </EditForm>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private bool _isNew => !Id.HasValue;
+
+    // MUTABLE page view-model (safe for @bind)
+    private StepVm? _vm;
+
+    // SLA state
+    private SlaRuleUpsertDto _sla = new();
+    private SlaRuleDto? _existingSla;
+    private bool _slaLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_isNew)
+        {
+            var wfId = ParseWfIdFromQuery();
+            _vm = new StepVm
+            {
+                Id = Guid.Empty,
+                WorkflowTemplateId = wfId,
+                StepOrder = 1,
+                Code = "",
+                Name = "",
+                AssignmentMode = "AutoAssign",
+                AllowedRolesCsv = null,
+                AllowCreatorOrPreparer = false
+            };
+            // SLA tab disabled until saved
+        }
+        else
+        {
+            var dto = await Steps.GetAsync(Id!.Value);
+            if (dto is null) { Nav.NavigateTo("/admin/workflows"); return; }
+
+            _vm = new StepVm
+            {
+                Id = dto.Id,
+                WorkflowTemplateId = dto.WorkflowTemplateId,
+                StepOrder = dto.StepOrder,
+                Code = dto.Code,
+                Name = dto.Name,
+                AssignmentMode = dto.AssignmentMode,
+                AllowedRolesCsv = dto.AllowedRolesCsv,
+                AllowCreatorOrPreparer = dto.AllowCreatorOrPreparer
+            };
+
+            await LoadSlaAsync(); // only load SLA when editing existing step
+        }
+    }
+
+    // Matches EventCallback<EditContext>
+    private async Task HandleValidSubmit(EditContext _)
+    {
+        if (_vm is null) return;
+
+        var dto = new StepEditDto(
+          Id: _vm.Id,
+          WorkflowTemplateId: _vm.WorkflowTemplateId,
+          StepOrder: _vm.StepOrder,
+          Code: _vm.Code ?? "",
+          Name: _vm.Name ?? "",
+          AssignmentMode: _vm.AssignmentMode ?? "AutoAssign",
+          AllowedRolesCsv: _vm.AllowedRolesCsv,
+          AllowCreatorOrPreparer: _vm.AllowCreatorOrPreparer
+        );
+
+        if (_isNew)
+        {
+            var stepId = await Steps.CreateAsync(dto);
+            Nav.NavigateTo($"/admin/steps/{stepId}/edit");
+            return;
+        }
+        else
+        {
+            await Steps.UpdateAsync(dto);
+            // Refresh SLA after updates if needed
+            await LoadSlaAsync();
+            // Stay on page after save, or navigate back — keeping your original behavior:
+            Nav.NavigateTo($"/admin/workflows/{_vm.WorkflowTemplateId}/steps");
+        }
+    }
+
+    private async Task LoadSlaAsync()
+    {
+        if (_vm is null || _vm.Id == Guid.Empty) return;
+
+        _existingSla = await SlaAdmin.GetForStepAsync(_vm.Id);
+        _sla = new SlaRuleUpsertDto
+        {
+            WorkflowStepTemplateId = _vm.Id, // ✅ no "?"
+            DueDays = _existingSla?.DueDays ?? 5,
+            ReminderOffsetsCsv = _existingSla?.ReminderOffsetsCsv ?? "",
+            EscalationOffsetDays = _existingSla?.EscalationOffsetDays,
+            IsActive = _existingSla?.IsActive ?? true,
+            RowVersion = _existingSla?.RowVersion
+        };
+        _slaLoaded = true;
+        StateHasChanged();
+    }
+
+
+    private async Task SaveSlaAsync()
+    {
+        try
+        {
+            var saved = await SlaAdmin.UpsertForStepAsync(_sla);
+            _existingSla = saved;
+            _sla.RowVersion = saved.RowVersion;
+            // TODO: integrate your toast/snackbar here (e.g., _toast.Success("SLA saved"))
+        }
+        catch (Exception ex)
+        {
+            ex.ToString();
+            // TODO: integrate your toast/snackbar here (e.g., _toast.Error(ex.Message))
+        }
+    }
+
+    private Guid ParseWfIdFromQuery()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("wfId", out var wfIdStr) && Guid.TryParse(wfIdStr, out var g))
+            return g;
+        return Guid.Empty;
+    }
+
+    // Simple mutable VM
+    private sealed class StepVm
+    {
+        public Guid Id { get; set; }
+        public Guid WorkflowTemplateId { get; set; }
+        public int StepOrder { get; set; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+        public string? AssignmentMode { get; set; }
+        public string? AllowedRolesCsv { get; set; }
+        public bool AllowCreatorOrPreparer { get; set; }
+    }
+}

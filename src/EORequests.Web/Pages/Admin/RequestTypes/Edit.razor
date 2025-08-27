@@ -1,0 +1,102 @@
+﻿@page "/admin/requesttypes/new/edit"
+@page "/admin/requesttypes/{id:guid}/edit"
+@attribute [Authorize(Policy = "AdminOnly")]
+@using Microsoft.AspNetCore.Components.Forms
+@using EORequests.Application.Interfaces
+@using EORequests.Application.DTOs.RequestType
+@using Microsoft.EntityFrameworkCore
+@inject IRequestTypeAdminService RequestTypes
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <h2 class="h5 mb-3">@(_isNew ? "New Request Type" : "Edit Request Type")</h2>
+
+    @if (_vm is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else
+    {
+        <EditForm Model="_vm" OnValidSubmit="OnSave">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Code</label>
+                    <input class="form-control" @bind="_vm.Code" />
+                    <div class="form-text">Unique short code (e.g., CONSULT).</div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Name</label>
+                    <input class="form-control" @bind="_vm.Name" />
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save</button>
+                <a class="btn btn-outline-secondary" href="/admin/requesttypes">Back</a>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private bool _isNew => !Id.HasValue;
+    private Vm? _vm;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_isNew)
+        {
+            _vm = new Vm { Code = "", Name = "" };
+        }
+        else
+        {
+            var dto = await RequestTypes.GetAsync(Id!.Value);
+            if (dto is null) { Nav.NavigateTo("/admin/requesttypes"); return; }
+            _vm = new Vm { Id = dto.Id, Code = dto.Code, Name = dto.Name };
+        }
+    }
+
+    private async Task OnSave(EditContext _)
+    {
+        if (_vm is null) return;
+
+        try
+        {
+            var savedId = await RequestTypes.UpsertAsync(new RequestTypeUpsertDto
+            {
+                Id = _vm.Id == Guid.Empty ? null : _vm.Id,
+                Code = _vm.Code ?? "",
+                Name = _vm.Name ?? ""
+            });
+
+            // After create, go to edit for that item; after update, back to list (or stay).
+            if (_isNew)
+                Nav.NavigateTo($"/admin/requesttypes/{savedId}/edit");
+            else
+                Nav.NavigateTo("/admin/requesttypes");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IX_request_type_Code") == true)
+        {
+            // Unique index violation on Code
+            // TODO: plug into your toast service
+            // _toast.Error("Code already exists. Please choose another.");
+        }
+        catch (Exception ex)
+        {
+            ex.ToString();
+            // TODO: toast/log
+            // _toast.Error(ex.Message);
+        }
+    }
+
+    private sealed class Vm
+    {
+        public Guid Id { get; set; }
+        public string? Code { get; set; }
+        public string? Name { get; set; }
+    }
+}

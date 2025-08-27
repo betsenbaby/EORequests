@@ -9,6 +9,8 @@ namespace EORequests.Infrastructure.Configurations
         public void Configure(EntityTypeBuilder<RequestType> b)
         {
             b.ToTable("request_type");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             b.Property(x => x.Code).HasMaxLength(64).IsRequired();
             b.Property(x => x.Name).HasMaxLength(256).IsRequired();
             b.Property(x => x.Description).HasMaxLength(1000);

@@ -1,0 +1,67 @@
+﻿@page "/admin/requesttypes"
+@attribute [Authorize(Policy = "AdminOnly")]
+@using EORequests.Application.Interfaces
+@using EORequests.Application.DTOs.RequestType
+@inject IRequestTypeAdminService RequestTypes
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 m-0">Request Types</h2>
+        <button class="btn btn-primary" @onclick="New">Add New</button>
+    </div>
+
+    @if (_rows is null)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="alert alert-info">No request types yet.</div>
+    }
+    else
+    {
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th style="width:180px">Code</th>
+                    <th>Name</th>
+                    <th style="width:180px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _rows)
+                {
+                    <tr>
+                        <td><strong>@r.Code</strong></td>
+                        <td>@r.Name</td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-secondary btn-sm me-2" @onclick="() => Edit(r.Id)">Edit</button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Delete(r.Id)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<RequestTypeDto>? _rows;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rows = (await RequestTypes.GetAllAsync()).ToList();
+    }
+
+    private void New() => Nav.NavigateTo("/admin/requesttypes/new/edit");
+    private void Edit(Guid id) => Nav.NavigateTo($"/admin/requesttypes/{id}/edit");
+
+    private async Task Delete(Guid id)
+    {
+        // TODO: confirm dialog
+        await RequestTypes.DeleteAsync(id);
+        _rows = (await RequestTypes.GetAllAsync()).ToList();
+        StateHasChanged();
+    }
+}
